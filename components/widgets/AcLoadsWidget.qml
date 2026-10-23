@@ -10,9 +10,7 @@ import Victron.VenusOS
 AcWidget {
 	id: root
 
-	readonly property ObjectAcConnection measurements: Global.system.showInputLoads
-			? Global.system.load.acIn
-			: Global.system.load.ac
+	readonly property ObjectAcConnection measurements: Global.system.load.acOut
 
 	//% "AC Loads"
 	title: qsTrId("overview_widget_acloads_title")
