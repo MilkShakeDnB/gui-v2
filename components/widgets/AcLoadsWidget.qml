@@ -10,6 +10,7 @@ import Victron.VenusOS
 AcWidget {
 	id: root
 
+	// Renogy: AC output only, without Grid power.
 	readonly property ObjectAcConnection measurements: Global.system.load.acOut
 
 	//% "AC Loads"
