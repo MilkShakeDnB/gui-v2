@@ -293,7 +293,7 @@ Item {
 				opacity: root._gaugeArcOpacity
 				animationEnabled: root.animationEnabled && !pauseRightGaugeAnimations.running
 				valueType: VenusOS.Gauges_ValueType_RisingPercentage
-				phaseModel: Global.system.load.ac.phases
+				phaseModel: Global.system.load.acOut.phases
 				maximumValue: Global.system.load.maximumAcCurrent
 
 				ArcGaugeQuantityRow {
@@ -302,7 +302,7 @@ Item {
 					rightPadding: root._gaugeLabelMargin - root._gaugeArcMargin
 					opacity: root._gaugeLabelOpacity
 					quantityLabel.sourceType: VenusOS.ElectricalQuantity_Source_Ac
-					quantityLabel.dataObject: Global.system.load.ac
+					quantityLabel.dataObject: Global.system.load.acOut
 				}
 			}
 			onStatusChanged: if (status === Loader.Error) console.warn("Unable to load AC load edge")
