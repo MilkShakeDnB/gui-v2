@@ -254,7 +254,7 @@ exported power v  0.4 |   /
 		title: qsTrId("brief_ac_loads")
 		icon.source: "qrc:/images/acloads.svg"
 		quantityLabel.sourceType: VenusOS.ElectricalQuantity_Source_Ac
-		quantityLabel.dataObject: Global.system.load.ac
+		quantityLabel.dataObject: Global.system.load.acOut
 		loadersActive: Global.system.hasAcLoads
 		visible: loadersActive
 		graph: LoadGraph {
@@ -263,7 +263,7 @@ exported power v  0.4 |   /
 
 			AcPhasesCurrentRange {
 				id: acLoadGraphRange
-				phaseModel: root.visible ? Global.system.load.ac.phases : null
+				phaseModel: root.visible ? Global.system.load.acOut.phases : null
 				maximumCurrent: Global.system.load.maximumAcCurrent
 			}
 		}
@@ -272,7 +272,7 @@ exported power v  0.4 |   /
 			height: Theme.geometry_barGauge_vertical_width_large
 			orientation: Qt.Horizontal
 			valueType: VenusOS.Gauges_ValueType_RisingPercentage
-			phaseModel: root.visible ? Global.system.load.ac.phases : null
+			phaseModel: root.visible ? Global.system.load.acOut.phases : null
 			maximumValue: Global.system.load.maximumAcCurrent
 			animationEnabled: root.animationEnabled
 		}

@@ -13,6 +13,10 @@ Item {
 	required property bool animationEnabled
 	required property bool showSidePanel
 	required property GaugeModel gaugeModel
+
+	readonly property AcInput nonGeneratorInput: Global.acInputs.input1 && Global.acInputs.input1.source !== VenusOS.AcInputs_InputSource_Generator ? Global.acInputs.input1
+		: Global.acInputs.input2 && Global.acInputs.input2.source !== VenusOS.AcInputs_InputSource_Generator ? Global.acInputs.input2
+		: null
 	readonly property bool graphsOpened: root.state === "panelOpened"
 
 	property int topRightButton: sidePanel.active && state !== "panelOpening"
@@ -148,9 +152,9 @@ Item {
 				opacity: root._gaugeArcOpacity
 				animationEnabled: root.animationEnabled && !pauseLeftGaugeAnimations.running
 				valueType: VenusOS.Gauges_ValueType_NeutralPercentage
-				phaseModel: Global.acInputs.highlightedInput?.phases ?? null
-				minimumValue: !!Global.acInputs.highlightedInput ? Global.acInputs.highlightedInput.inputInfo.minimumCurrent : NaN
-				maximumValue: !!Global.acInputs.highlightedInput ? Global.acInputs.highlightedInput.inputInfo.maximumCurrent : NaN
+				phaseModel: root.nonGeneratorInput?.phases ?? null
+				minimumValue: !!root.nonGeneratorInput ? root.nonGeneratorInput.inputInfo.minimumCurrent : NaN
+				maximumValue: !!root.nonGeneratorInput ? root.nonGeneratorInput.inputInfo.maximumCurrent : NaN
 				inputMode: true
 
 				AcInputDirectionIcon {
@@ -160,7 +164,7 @@ Item {
 						bottom: acInGaugeQuantity.top
 						bottomMargin: Theme.geometry_briefPage_edgeGauge_quantityLabel_feedback_margin
 					}
-					input: Global.acInputs.highlightedInput
+					input: root.nonGeneratorInput
 				}
 
 				ArcGaugeQuantityRow {
@@ -169,11 +173,11 @@ Item {
 					// When >= 2 left gauges, AC input is always the top one, so label aligns to
 					// the bottom.
 					alignment: Qt.AlignLeft | (gaugeParams.activeGaugeCount >= 2 ? Qt.AlignBottom : Qt.AlignVCenter)
-					icon.source: Global.acInputs.sourceIcon(Global.acInputs.highlightedInput?.source ?? Global.acInputs.findValidSource())
+					icon.source: Global.acInputs.sourceIcon(root.nonGeneratorInput?.source ?? Global.acInputs.findValidSource())
 					leftPadding: root._gaugeLabelMargin - root._gaugeArcMargin
 					opacity: root._gaugeLabelOpacity
 					quantityLabel.sourceType: VenusOS.ElectricalQuantity_Source_AcInputOnly
-					quantityLabel.dataObject: Global.acInputs.highlightedInput
+					quantityLabel.dataObject: root.nonGeneratorInput
 				}
 			}
 			onStatusChanged: if (status === Loader.Error) console.warn("Unable to load AC input edge")
