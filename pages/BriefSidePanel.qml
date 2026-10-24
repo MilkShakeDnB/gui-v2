@@ -74,13 +74,19 @@ ColumnLayout {
 	BriefSidePanelWidget {
 		id: acInputWidget
 
-		title: loadersActive ? Global.acInputs.sourceToText(nonGeneratorInput.source) : ""
-		icon.source: loadersActive ? Global.acInputs.sourceIcon(nonGeneratorInput.source) : ""
+	readonly property bool gridOnline: !!root.nonGeneratorInput && root.nonGeneratorInput.operational
+
+		title: gridOnline ? Global.acInputs.sourceToText(nonGeneratorInput.source) : "Grid"
+		icon.source: gridOnline ? Global.acInputs.sourceIcon(nonGeneratorInput.source) : "qrc:/images/grid.svg"
 		quantityLabel.sourceType: VenusOS.ElectricalQuantity_Source_AcInputOnly
 		quantityLabel.dataObject: nonGeneratorInput
+	quantityLabel.valueText: gridOnline ? quantityLabel.quantityInfo.number : "OFFLINE"
+	quantityLabel.unitText: gridOnline ? quantityLabel.quantityInfo.unit : ""
+	quantityLabel.valueColor: gridOnline ? Theme.color_font_primary : Theme.color_font_secondary
+	quantityLabel.font.pixelSize: gridOnline ? Theme.font_briefPage_sidePanel_quantityLabel_size : Theme.font_briefPage_sidePanel_quantityLabel_size * 0.76
 		quantityLabel.leftPadding: acInputDirectionIcon.visible ? (acInputDirectionIcon.width + Theme.geometry_acInputDirectionIcon_rightMargin) : 0
 		loadersActive: nonGeneratorInput && nonGeneratorInput.operational
-		visible: loadersActive
+		visible: true
 
 		Layout.fillWidth: true
 

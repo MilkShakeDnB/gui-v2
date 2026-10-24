@@ -17,6 +17,7 @@ Item {
 	readonly property AcInput nonGeneratorInput: Global.acInputs.input1 && Global.acInputs.input1.source !== VenusOS.AcInputs_InputSource_Generator ? Global.acInputs.input1
 		: Global.acInputs.input2 && Global.acInputs.input2.source !== VenusOS.AcInputs_InputSource_Generator ? Global.acInputs.input2
 		: null
+	readonly property bool gridOnline: !!nonGeneratorInput && nonGeneratorInput.operational
 	readonly property bool graphsOpened: root.state === "panelOpened"
 
 	property int topRightButton: sidePanel.active && state !== "panelOpening"
@@ -130,7 +131,7 @@ Item {
 
 			// Similarly to the Overview page, show the AC input, even when it is not connected, as
 			// long as one of the AC input sources are valid.
-			active: Global.acInputs.findValidSource() !== VenusOS.AcInputs_InputSource_NotAvailable && root.state !== "panelOpened"
+			active: root.state !== "panelOpened"
 
 			sourceComponent: SideMultiGauge {
 				readonly property real quantityWidth: acInGaugeQuantity.width - acInputDirectionIcon.width
@@ -152,7 +153,7 @@ Item {
 				opacity: root._gaugeArcOpacity
 				animationEnabled: root.animationEnabled && !pauseLeftGaugeAnimations.running
 				valueType: VenusOS.Gauges_ValueType_NeutralPercentage
-				phaseModel: root.nonGeneratorInput?.phases ?? null
+				phaseModel: root.gridOnline ? root.nonGeneratorInput.phases : null
 				minimumValue: !!root.nonGeneratorInput ? root.nonGeneratorInput.inputInfo.minimumCurrent : NaN
 				maximumValue: !!root.nonGeneratorInput ? root.nonGeneratorInput.inputInfo.maximumCurrent : NaN
 				inputMode: true
@@ -173,11 +174,15 @@ Item {
 					// When >= 2 left gauges, AC input is always the top one, so label aligns to
 					// the bottom.
 					alignment: Qt.AlignLeft | (gaugeParams.activeGaugeCount >= 2 ? Qt.AlignBottom : Qt.AlignVCenter)
-					icon.source: Global.acInputs.sourceIcon(root.nonGeneratorInput?.source ?? Global.acInputs.findValidSource())
+					icon.source: root.gridOnline ? Global.acInputs.sourceIcon(root.nonGeneratorInput.source) : "qrc:/images/grid.svg"
 					leftPadding: root._gaugeLabelMargin - root._gaugeArcMargin
 					opacity: root._gaugeLabelOpacity
 					quantityLabel.sourceType: VenusOS.ElectricalQuantity_Source_AcInputOnly
 					quantityLabel.dataObject: root.nonGeneratorInput
+                quantityLabel.valueText: root.gridOnline ? quantityLabel.quantityInfo.number : "OFFLINE"
+                quantityLabel.unitText: root.gridOnline ? quantityLabel.quantityInfo.unit : ""
+                quantityLabel.valueColor: root.gridOnline ? Theme.color_font_primary : Theme.color_font_secondary
+                quantityLabel.font.pixelSize: root.gridOnline ? Theme.font_briefPage_quantityLabel_size : Theme.font_briefPage_quantityLabel_size * 0.76
 				}
 			}
 			onStatusChanged: if (status === Loader.Error) console.warn("Unable to load AC input edge")
