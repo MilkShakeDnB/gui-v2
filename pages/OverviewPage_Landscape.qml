@@ -293,24 +293,44 @@ FocusScope {
 		let i
 
 		// Add AC-in widgets.
+		// Identify the Grid/Shore slot, including when its meter disappears.
+		// Only one slot may represent an offline Grid.
+		const gridSlot = Global.acInputs.isGridOrShore(Global.acInputs.input1) ? 0
+		        : Global.acInputs.isGridOrShore(Global.acInputs.input2) ? 1
+		        : !Global.acInputs.input1 ? 0
+		        : !Global.acInputs.input2 ? 1
+		        : -1
+
 		const acInputConfigs = [
-			{ input: Global.acInputs.input1, widgetType: VenusOS.OverviewWidget_Type_AcInputPriority },
-			{ input: Global.acInputs.input2, widgetType: VenusOS.OverviewWidget_Type_AcInputOther },
+		    {
+		        input: Global.acInputs.input1,
+		        widgetType: VenusOS.OverviewWidget_Type_AcInputPriority,
+		        showGridOffline: gridSlot === 0
+		    },
+		    {
+		        input: Global.acInputs.input2,
+		        widgetType: VenusOS.OverviewWidget_Type_AcInputOther,
+		        showGridOffline: gridSlot === 1
+		    },
 		]
-		if (Global.acInputs.isGridOrShore(Global.acInputs.input2)
-				&& !Global.acInputs.isGridOrShore(Global.acInputs.input1)) {
-			// Prefer to show the Grid/Shore AC input first, so swap the display order if needed.
-			acInputConfigs[0].widgetType = VenusOS.OverviewWidget_Type_AcInputOther
-			acInputConfigs[1].widgetType = VenusOS.OverviewWidget_Type_AcInputPriority
+
+		// Keep Grid/Shore in the priority position.
+		if (gridSlot === 1) {
+		    acInputConfigs[0].widgetType = VenusOS.OverviewWidget_Type_AcInputOther
+		    acInputConfigs[1].widgetType = VenusOS.OverviewWidget_Type_AcInputPriority
 		}
+
 		for (const inputConfig of acInputConfigs) {
-			widget = _createWidget(inputConfig.widgetType)
-			if (!!inputConfig.input) {
-				widget.input = inputConfig.input
-				widgetCandidates.splice(_leftWidgetInsertionIndex(inputConfig.widgetType, widgetCandidates), 0, widget)
-			} else {
-				widget.input = null
-			}
+		    widget = _createWidget(inputConfig.widgetType)
+		    widget.input = inputConfig.input
+		    widget.showGridOffline = inputConfig.showGridOffline
+
+		    if (!!inputConfig.input || inputConfig.showGridOffline) {
+		        widgetCandidates.splice(
+		            _leftWidgetInsertionIndex(inputConfig.widgetType, widgetCandidates),
+		            0, widget
+		        )
+		    }
 		}
 
 		// Add solar widget

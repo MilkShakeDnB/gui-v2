@@ -117,7 +117,11 @@ FocusScope {
 			GridLayout {
 				id: leftInputColumn
 
-				readonly property int widgetCount: (!!Global.acInputs.input1 ? 1 : 0) + (!!Global.acInputs.input2 ? 1 : 0)
+				readonly property bool showInput1: !!Global.acInputs.input1
+                        || !Global.acInputs.isGridOrShore(Global.acInputs.input2)
+                readonly property bool showInput2: !!Global.acInputs.input2
+                        || (!!Global.acInputs.input1 && !Global.acInputs.isGridOrShore(Global.acInputs.input1))
+                readonly property int widgetCount: (showInput1 ? 1 : 0) + (showInput2 ? 1 : 0)
 
 				readonly property bool stretchHorizontally: root._stretchWidgetHorizontally(widgetCount, rightInputColumn.widgetCount)
 				readonly property int displayWidgetSize: root._widgetSizeForSectionColumnCount(widgetCount, stretchHorizontally)
@@ -131,6 +135,8 @@ FocusScope {
 				// Prefer to show the Grid/Shore AC input first, so swap the display order if needed.
 				readonly property bool swapInputs: (Global.acInputs.isGridOrShore(Global.acInputs.input2)
 													&& !Global.acInputs.isGridOrShore(Global.acInputs.input1))
+				|| (!Global.acInputs.input2 && !!Global.acInputs.input1
+					&& !Global.acInputs.isGridOrShore(Global.acInputs.input1))
 
 				rowSpacing: Theme.geometry_overviewPage_widget_spacing
 				columns: 1
@@ -139,7 +145,7 @@ FocusScope {
 				Loader {
 					id: acInput1Loader
 
-					active: !!Global.acInputs.input1
+					active: leftInputColumn.showInput1
 					visible: active
 					Layout.fillWidth: true
 					Layout.fillHeight: true
@@ -148,6 +154,8 @@ FocusScope {
 
 					sourceComponent: AcInputWidget {
 						input: Global.acInputs.input1
+						showGridOffline: Global.acInputs.isGridOrShore(Global.acInputs.input1)
+                            || (!Global.acInputs.input1 && !Global.acInputs.isGridOrShore(Global.acInputs.input2))
 						type: VenusOS.OverviewWidget_Type_AcInputPriority
 						size: leftInputColumn.displayWidgetSize
 						stretchHorizontally: leftInputColumn.stretchHorizontally
@@ -159,7 +167,7 @@ FocusScope {
 				Loader {
 					id: acInput2Loader
 
-					active: !!Global.acInputs.input2
+					active: leftInputColumn.showInput2
 					visible: active
 					Layout.fillWidth: true
 					Layout.fillHeight: true
@@ -168,6 +176,9 @@ FocusScope {
 
 					sourceComponent: AcInputWidget {
 						input: Global.acInputs.input2
+						showGridOffline: Global.acInputs.isGridOrShore(Global.acInputs.input2)
+                            || (!Global.acInputs.input2 && !!Global.acInputs.input1
+                                && !Global.acInputs.isGridOrShore(Global.acInputs.input1))
 						type: VenusOS.OverviewWidget_Type_AcInputOther
 						size: leftInputColumn.displayWidgetSize
 						stretchHorizontally: leftInputColumn.stretchHorizontally

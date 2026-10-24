@@ -12,12 +12,14 @@ AcWidget {
 
 	readonly property AcInputSystemInfo inputInfo: input?.inputInfo ?? null
 	readonly property bool inputOperational: input && input.operational
+	property bool showGridOffline: false
+	readonly property bool gridOffline: showGridOffline && !inputOperational
 
 	readonly property bool _showSideGauge: inputOperational && size >= VenusOS.OverviewWidget_Size_M
 
 	rightPadding: _showSideGauge ? Theme.geometry_overviewPage_widget_sideGauge_margins
 			: Theme.geometry_overviewPage_widget_content_horizontalMargin
-	title: !!inputInfo ? Global.acInputs.sourceToText(inputInfo.source) : ""
+	title: gridOffline ? "Grid" : (!!inputInfo ? Global.acInputs.sourceToText(inputInfo.source) : "")
 	quantitySourceType: VenusOS.ElectricalQuantity_Source_AcInputOnly
 	quantityDataObject: inputOperational ? input : null
 	phaseModel: inputOperational && input.phases.count > 1 ? input.phases : null
@@ -33,8 +35,8 @@ AcWidget {
 			width: parent.width - (sideGaugeLoader.active ? sideGaugeLoader.width + Theme.geometry_overviewPage_widget_sideGauge_margins : 0)
 			height: parent.height
 			widget: root
-			iconSource: !!root.inputInfo ? Global.acInputs.sourceIcon(root.inputInfo.source) : ""
-			stateText: root.inputOperational ? ""
+			iconSource: root.gridOffline ? "qrc:/images/grid.svg" : (!!root.inputInfo ? Global.acInputs.sourceIcon(root.inputInfo.source) : "")
+			stateText: root.gridOffline ? "OFFLINE" : root.inputOperational ? ""
 					: root.inputInfo && root.inputInfo.source === VenusOS.AcInputs_InputSource_Generator ? CommonWords.stopped
 					: CommonWords.disconnected
 		}
