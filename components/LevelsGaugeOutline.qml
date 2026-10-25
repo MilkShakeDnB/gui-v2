@@ -37,6 +37,7 @@ Item {
 	property color iconColor: Theme.color_font_primary
 	property string unitText
 	property int quantityFormatHints
+	property alias quantityDecimals: quantityLabel.decimals
 
 	implicitHeight: Theme.screenSize === Theme.Portrait ? gaugeContentLoader.y + gaugeContentLoader.height : 0
 

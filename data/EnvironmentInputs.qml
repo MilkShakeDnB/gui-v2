@@ -11,6 +11,7 @@ QtObject {
 
 	readonly property FilteredDeviceModel model: FilteredDeviceModel {
 		serviceTypes: ["temperature"]
+		sorting: FilteredDeviceModel.DeviceInstance
 	}
 
 	readonly property ListModel _temperatureDetails: ListModel {

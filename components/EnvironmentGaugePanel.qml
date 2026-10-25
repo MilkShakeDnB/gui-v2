@@ -14,7 +14,41 @@ AbstractListItem {
 	required property Gradient temperatureGaugeGradient
 	required property Gradient humidityGaugeGradient
 
-	readonly property bool hasTwoGauges: !isNaN(temperatureItem.value) && !isNaN(humidityItem.value)
+	// The service UID may include a backend prefix (e.g. mock/ or dbus/).
+	// Match an actual Tuya service name, not an arbitrary substring.
+	readonly property bool isTuyaSensor: {
+		const uid = String(root.device?.serviceUid ?? "")
+		const serviceName = uid.substring(uid.lastIndexOf("/") + 1)
+		return /^com\.victronenergy\.temperature\.tuya_[a-z0-9_]+$/.test(serviceName)
+	}
+
+	readonly property bool temperatureAvailable:
+		temperatureItem.valid
+		&& typeof temperatureItem.value === "number"
+		&& isFinite(temperatureItem.value)
+		&& (!root.isTuyaSensor
+			|| (temperatureStatusItem.valid && temperatureStatusItem.value === "FRESH"))
+
+	readonly property bool humidityAvailable:
+		humidityItem.valid
+		&& typeof humidityItem.value === "number"
+		&& isFinite(humidityItem.value)
+		&& (!root.isTuyaSensor
+			|| (humidityStatusItem.valid && humidityStatusItem.value === "FRESH"))
+
+	readonly property bool hasTwoGauges: temperatureAvailable && humidityAvailable
+
+	readonly property string batteryStatus:
+		batteryStateItem.valid && batteryStateItem.value !== null
+			? String(batteryStateItem.value).toUpperCase() : "UNKNOWN"
+	readonly property string temperatureStatus:
+		temperatureStatusItem.valid && temperatureStatusItem.value !== null
+			? String(temperatureStatusItem.value).toUpperCase() : "UNKNOWN"
+	readonly property string humidityStatus:
+		humidityStatusItem.valid && humidityStatusItem.value !== null
+			? String(humidityStatusItem.value).toUpperCase() : "UNKNOWN"
+	readonly property bool hasTuyaWarning: root.batteryStatus === "LOW"
+		|| root.temperatureStatus !== "FRESH" || root.humidityStatus !== "FRESH"
 
 	implicitWidth: Math.max(
 		implicitBackgroundWidth + leftInset + rightInset,
@@ -29,6 +63,7 @@ AbstractListItem {
 	rightPadding: rightInset + Theme.geometry_levelsGauge_horizontalPadding
 	topPadding: Theme.geometry_levelsPage_panel_header_height + Theme.geometry_environmentGaugePanel_verticalPadding
 	bottomPadding: Theme.geometry_environmentGaugePanel_verticalPadding
+		+ (root.isTuyaSensor ? tuyaStatusFooter.implicitHeight + 12 : 0)
 
 	background: Item {
 		implicitWidth: Theme.geometry_levelsPage_panel_background_width
@@ -70,6 +105,30 @@ AbstractListItem {
 			topRightRadius: colorIndicator.visible ? 0 : Theme.geometry_levelsPage_panel_radius
 			bottomLeftRadius: Theme.geometry_levelsPage_panel_radius
 			bottomRightRadius: Theme.geometry_levelsPage_panel_radius
+		}
+
+		// Footer is placed on the background, below the padded gauge content.
+		// Allow up to three wrapped lines on narrow landscape panels.
+		Label {
+			id: tuyaStatusFooter
+			visible: root.isTuyaSensor
+			anchors {
+				left: parent.left
+				right: parent.right
+				bottom: parent.bottom
+				leftMargin: root.leftPadding
+				rightMargin: root.rightPadding
+				bottomMargin: 6
+			}
+			horizontalAlignment: Text.AlignHCenter
+			wrapMode: Text.Wrap
+			maximumLineCount: 3
+			elide: Text.ElideRight
+			font.pixelSize: Math.max(11, Math.round(Theme.font_size_body2 * 0.75))
+			color: root.hasTuyaWarning ? Theme.color_orange : Theme.color_font_secondary
+			text: "BAT " + root.batteryStatus
+				+ "  |  T " + root.temperatureStatus
+				+ "  |  H " + root.humidityStatus
 		}
 	}
 
@@ -115,9 +174,14 @@ AbstractListItem {
 			LevelsGaugeOutline {
 				width: gaugeFlow.gaugeWidth
 				height: Theme.screenSize === Theme.Portrait ? implicitHeight : gaugeFlow.parent.height
+				// If only humidity is fresh, do not show a misleading empty temperature gauge.
+				visible: root.temperatureAvailable || !root.humidityAvailable
 				name: root.hasTwoGauges ? "" : (root.device?.name ?? "")
 				iconSource: "qrc:/images/icon_temp_32.svg"
-				value: temperatureItem.valid ? Math.round(temperatureItem.value) : NaN
+				value: root.temperatureAvailable
+					? (root.isTuyaSensor ? Math.round(temperatureItem.value * 10) / 10
+						: Math.round(temperatureItem.value)) : NaN
+				quantityDecimals: root.isTuyaSensor ? 1 : 0
 				unit: Global.systemSettings.temperatureUnit
 				unitText: Units.defaultUnitString(Global.systemSettings.temperatureUnit)
 				quantityFormatHints: Theme.screenSize === Theme.Portrait ? 0 : Units.CompactUnitFormat
@@ -125,7 +189,7 @@ AbstractListItem {
 
 				gauge: EnvironmentGauge {
 					orientation: Theme.screenSize === Theme.Portrait ? Qt.Horizontal : Qt.Vertical
-					value: temperatureItem.value ?? NaN
+					value: root.temperatureAvailable ? temperatureItem.value : NaN
 					minimumValue: Global.environmentInputs.temperatureGaugeMinimum(temperatureType.value)
 					maximumValue: Global.environmentInputs.temperatureGaugeMaximum(temperatureType.value)
 					stepSize: Global.environmentInputs.temperatureGaugeStepSize(temperatureType.value)
@@ -141,24 +205,24 @@ AbstractListItem {
 			LevelsGaugeOutline {
 				width: gaugeFlow.gaugeWidth
 				height: Theme.screenSize === Theme.Portrait ? implicitHeight : gaugeFlow.parent.height
-				visible: !isNaN(humidityItem.value)
+				visible: root.humidityAvailable
 				name: root.hasTwoGauges ? "" : (root.device?.name ?? "")
 				iconSource: "qrc:/images/icon_humidity_32.svg"
-				value: humidityItem.valid ? Math.round(humidityItem.value) : NaN
+				value: root.humidityAvailable ? Math.round(humidityItem.value) : NaN
 				unit: VenusOS.Units_Percentage
 				// Don't translate. Short local acronyms often don't exist. RH is an international standard.
 				// In case user is not familiar with the acronym "RH" there is also drop icon and percentage sign (%).
 				unitText: "RH"
 				quantityFormatHints: Theme.screenSize === Theme.Portrait ? 0 : Units.CompactUnitFormat
 				gaugeHorizontalPadding: Theme.geometry_environmentGauge_gauge_horizontalPadding
-				gauge: isNaN(humidityItem.value) ? null : humidityGaugeComponent
+				gauge: root.humidityAvailable ? humidityGaugeComponent : null
 
 				Component {
 					id: humidityGaugeComponent
 
 					EnvironmentGauge {
 						orientation: Theme.screenSize === Theme.Portrait ? Qt.Horizontal : Qt.Vertical
-						value: humidityItem.value ?? NaN
+						value: root.humidityAvailable ? humidityItem.value : NaN
 						minimumValue: Theme.geometry_levelsPage_environment_humidityGauge_minimumValue
 						maximumValue: Theme.geometry_levelsPage_environment_humidityGauge_maximumValue
 						stepSize: Theme.geometry_environmentGauge_tick_step
@@ -178,6 +242,31 @@ AbstractListItem {
 			readonly property int intValue: valid ? value : VenusOS.Temperature_DeviceType_Generic
 			uid: root.device ? root.device.serviceUid + "/TemperatureType" : ""
 		}
+	}
+
+	VeQuickItem {
+		id: batteryStateItem
+		uid: root.isTuyaSensor && root.device ? root.device.serviceUid + "/Tuya/BatteryState" : ""
+	}
+
+	VeQuickItem {
+		id: temperatureStatusItem
+		uid: root.isTuyaSensor && root.device ? root.device.serviceUid + "/Tuya/TemperatureStatus" : ""
+	}
+
+	VeQuickItem {
+		id: humidityStatusItem
+		uid: root.isTuyaSensor && root.device ? root.device.serviceUid + "/Tuya/HumidityStatus" : ""
+	}
+
+	VeQuickItem {
+		id: temperatureAgeItem
+		uid: root.isTuyaSensor && root.device ? root.device.serviceUid + "/Tuya/TemperatureAgeMinutes" : ""
+	}
+
+	VeQuickItem {
+		id: humidityAgeItem
+		uid: root.isTuyaSensor && root.device ? root.device.serviceUid + "/Tuya/HumidityAgeMinutes" : ""
 	}
 
 	VeQuickItem {
