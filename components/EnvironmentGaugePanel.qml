@@ -14,12 +14,17 @@ AbstractListItem {
 	required property Gradient temperatureGaugeGradient
 	required property Gradient humidityGaugeGradient
 
-	// The service UID may include a backend prefix (e.g. mock/ or dbus/).
-	// Match an actual Tuya service name, not an arbitrary substring.
+	// Our Tuya bridge reserves temperature device instances 240..243.
+	// Match the D-Bus service name where possible, but also accept those
+	// instances: the GUI backend may prefix/suffix its service UID.
 	readonly property bool isTuyaSensor: {
-		const uid = String(root.device?.serviceUid ?? "")
-		const serviceName = uid.substring(uid.lastIndexOf("/") + 1)
-		return /^com\.victronenergy\.temperature\.tuya_[a-z0-9_]+$/.test(serviceName)
+		if (!root.device || root.device.serviceType !== "temperature")
+			return false
+		const uid = String(root.device.serviceUid ?? "").toLowerCase()
+		const matchingService = /(?:^|\/)com\.victronenergy\.temperature\.tuya_[a-z0-9_]+(?=\/|$)/.test(uid)
+		const instance = Number(root.device.deviceInstance)
+		const matchingInstance = Number.isInteger(instance) && instance >= 240 && instance <= 243
+		return matchingService || matchingInstance
 	}
 
 	readonly property bool temperatureAvailable:
