@@ -82,6 +82,9 @@ class FilteredDeviceModel : public QSortFilterProxyModel, public QQmlParserStatu
 	Q_PROPERTY(int count READ count NOTIFY countChanged)
 	Q_PROPERTY(Device *firstObject READ firstObject NOTIFY firstObjectChanged FINAL)
 	Q_PROPERTY(int sorting READ sorting WRITE setSorting NOTIFY sortingChanged FINAL)
+	// Optional per-instance user preferences; empty lists preserve existing behaviour.
+	Q_PROPERTY(QStringList preferredDeviceInstances READ preferredDeviceInstances WRITE setPreferredDeviceInstances NOTIFY preferredDeviceInstancesChanged FINAL)
+	Q_PROPERTY(QStringList hiddenDeviceInstances READ hiddenDeviceInstances WRITE setHiddenDeviceInstances NOTIFY hiddenDeviceInstancesChanged FINAL)
 	Q_PROPERTY(QStringList serviceTypes READ serviceTypes WRITE setServiceTypes NOTIFY serviceTypesChanged FINAL)
 	Q_PROPERTY(QVariantMap childFilterIds READ childFilterIds WRITE setChildFilterIds NOTIFY childFilterIdsChanged FINAL)
 	Q_PROPERTY(QJSValue childFilterFunction READ childFilterFunction WRITE setChildFilterFunction NOTIFY childFilterFunctionChanged FINAL)
@@ -106,6 +109,11 @@ public:
 	void setSorting(int sorting);
 	int sorting() const;
 
+	QStringList preferredDeviceInstances() const;
+	void setPreferredDeviceInstances(const QStringList &instances);
+	QStringList hiddenDeviceInstances() const;
+	void setHiddenDeviceInstances(const QStringList &instances);
+
 	QStringList serviceTypes() const;
 	void setServiceTypes(const QStringList &serviceTypes);
 
@@ -127,6 +135,8 @@ Q_SIGNALS:
 	void countChanged();
 	void firstObjectChanged();
 	void sortingChanged();
+	void preferredDeviceInstancesChanged();
+	void hiddenDeviceInstancesChanged();
 	void serviceTypesChanged();
 	void childFilterIdsChanged();
 	void childFilterFunctionChanged();
@@ -145,6 +155,8 @@ private:
 	void updateCount();
 
 	QStringList m_serviceTypes;
+	QStringList m_preferredDeviceInstances;
+	QStringList m_hiddenDeviceInstances;
 	QString m_firstUid;
 	QVariantMap m_childFilterIds;
 	QJSValue m_childFilterFunction;

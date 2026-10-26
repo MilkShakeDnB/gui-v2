@@ -55,6 +55,13 @@ Page {
 			}
 
 			ListNavigation {
+				text: "Environment → Sensors (Tuya V6)"
+				caption: "Names, visibility, and order shared by all local consoles"
+				preferredVisible: !!Global.environmentInputs
+				onClicked: Global.pageManager.pushPage("/pages/settings/PageSettingsEnvironmentSensors.qml", { title: text })
+			}
+
+			ListNavigation {
 				//% "Bluetooth Sensors"
 				text: qsTrId("pagesettingsintegrations_bluetooth_sensors")
 				preferredVisible: !!hasBluetoothSupport.value

@@ -441,6 +441,8 @@ set (VictronVenusOS_QML_MODULE_SOURCES
     pages/settings/PageSettingsDocumentation.qml
     pages/settings/PageSettingsDvcc.qml
     pages/settings/PageSettingsDynamicEss.qml
+    pages/settings/PageSettingsEnvironmentSensor.qml
+    pages/settings/PageSettingsEnvironmentSensors.qml
     pages/settings/PageSettingsEebus.qml
     pages/settings/PageSettingsEebusDevice.qml
     pages/settings/PageSettingsFirmware.qml

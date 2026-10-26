@@ -255,6 +255,32 @@ void FilteredDeviceModel::setSorting(int sorting)
 	}
 }
 
+QStringList FilteredDeviceModel::preferredDeviceInstances() const
+{
+	return m_preferredDeviceInstances;
+}
+
+void FilteredDeviceModel::setPreferredDeviceInstances(const QStringList &instances)
+{
+	if (m_preferredDeviceInstances == instances) return;
+	m_preferredDeviceInstances = instances;
+	if (m_completed) invalidate();
+	emit preferredDeviceInstancesChanged();
+}
+
+QStringList FilteredDeviceModel::hiddenDeviceInstances() const
+{
+	return m_hiddenDeviceInstances;
+}
+
+void FilteredDeviceModel::setHiddenDeviceInstances(const QStringList &instances)
+{
+	if (m_hiddenDeviceInstances == instances) return;
+	m_hiddenDeviceInstances = instances;
+	if (m_completed) invalidateFilter();
+	emit hiddenDeviceInstancesChanged();
+}
+
 QStringList FilteredDeviceModel::serviceTypes() const
 {
 	return m_serviceTypes;
@@ -369,6 +395,9 @@ bool FilteredDeviceModel::filterAcceptsRow(int sourceRow, const QModelIndex &sou
 		return false;
 	}
 
+	if (m_hiddenDeviceInstances.contains(QString::number(device->deviceInstance()))) {
+		return false;
+	}
 	if (!m_serviceTypes.isEmpty() && !m_serviceTypes.contains(device->serviceType())) {
 		return false;
 	}
@@ -387,6 +416,15 @@ bool FilteredDeviceModel::lessThan(const QModelIndex &sourceLeft, const QModelIn
 				sourceModel()->index(sourceRight.row(), sourceRight.column()).row());
 
 	if (leftDevice && rightDevice) {
+		// Explicit user preference takes priority; devices not yet configured follow
+		// their normal sorting (and appear after configured devices).
+		if (!m_preferredDeviceInstances.isEmpty()) {
+			const int leftRank = m_preferredDeviceInstances.indexOf(QString::number(leftDevice->deviceInstance()));
+			const int rightRank = m_preferredDeviceInstances.indexOf(QString::number(rightDevice->deviceInstance()));
+			if (leftRank >= 0 && rightRank >= 0 && leftRank != rightRank) return leftRank < rightRank;
+			if (leftRank >= 0 && rightRank < 0) return true;
+			if (leftRank < 0 && rightRank >= 0) return false;
+		}
 		// Sort by serviceType -> deviceInstance -> name.
 		if ((m_sorting & ServiceTypeOrder) && leftDevice->serviceType() != rightDevice->serviceType()) {
 			return m_serviceTypes.indexOf(leftDevice->serviceType()) < m_serviceTypes.indexOf(rightDevice->serviceType());

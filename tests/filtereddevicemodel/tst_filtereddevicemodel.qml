@@ -254,6 +254,45 @@ TestCase {
 		model.sorting = 0
 	}
 
+	function test_preferred_order_and_hidden_instances() {
+		const items = [
+			{ uid: "mock/com.victronenergy.temperature.tuya_caravan", instance: 240 },
+			{ uid: "mock/com.victronenergy.temperature.tuya_power_bay", instance: 241 },
+			{ uid: "mock/com.victronenergy.temperature.tuya_fridge", instance: 242 },
+			{ uid: "mock/com.victronenergy.temperature.tuya_freezer", instance: 243 },
+		]
+		model.serviceTypes = ["temperature"]
+		model.sorting = FilteredDeviceModel.DeviceInstance
+		try {
+			for (const item of items) {
+				MockManager.setValue(item.uid + "/DeviceInstance", item.instance)
+				MockManager.setValue(item.uid + "/ProductName", item.uid)
+			}
+			compare(model.count, 4)
+			compare(model.deviceAt(0).deviceInstance, 240)
+			compare(model.deviceAt(3).deviceInstance, 243)
+
+			model.preferredDeviceInstances = ["243", "241", "240", "242"]
+			compare(model.deviceAt(0).deviceInstance, 243)
+			compare(model.deviceAt(1).deviceInstance, 241)
+			compare(model.deviceAt(2).deviceInstance, 240)
+			compare(model.deviceAt(3).deviceInstance, 242)
+
+			model.hiddenDeviceInstances = ["241"]
+			compare(model.count, 3)
+			compare(model.deviceAt(0).deviceInstance, 243)
+			compare(model.deviceAt(1).deviceInstance, 240)
+			compare(model.deviceAt(2).deviceInstance, 242)
+		} finally {
+			model.preferredDeviceInstances = []
+			model.hiddenDeviceInstances = []
+			for (const item of items) MockManager.removeValue(item.uid)
+			model.serviceTypes = []
+			model.sorting = 0
+		}
+		compare(model.count, 0)
+	}
+
 	function test_child_filter_data() {
 		const devices = [
 			{ uid: "mock/com.victronenergy.generator.a", DeviceInstance: 1, ProductName: "Not enabled" },

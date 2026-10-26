@@ -89,7 +89,7 @@ AbstractListItem {
 				}
 				horizontalAlignment: Text.AlignHCenter
 				elide: Text.ElideRight
-				text: root.device?.name ?? ""
+				text: Global.environmentInputs.sensorDisplayName(root.device)
 			}
 		}
 
@@ -150,7 +150,7 @@ AbstractListItem {
 			}
 			font.pixelSize: Theme.font_levelsGauge_title
 			wrapMode: Text.Wrap
-			text: Theme.screenSize === Theme.Portrait && root.hasTwoGauges ? root.device?.name ?? "" : ""
+			text: Theme.screenSize === Theme.Portrait && root.hasTwoGauges ? Global.environmentInputs.sensorDisplayName(root.device) : ""
 			color: Theme.color_font_primary
 		}
 
@@ -176,7 +176,7 @@ AbstractListItem {
 				height: Theme.screenSize === Theme.Portrait ? implicitHeight : gaugeFlow.parent.height
 				// If only humidity is fresh, do not show a misleading empty temperature gauge.
 				visible: root.temperatureAvailable || !root.humidityAvailable
-				name: root.hasTwoGauges ? "" : (root.device?.name ?? "")
+				name: root.hasTwoGauges ? "" : (Global.environmentInputs.sensorDisplayName(root.device))
 				iconSource: "qrc:/images/icon_temp_32.svg"
 				value: root.temperatureAvailable
 					? (root.isTuyaSensor ? Math.round(temperatureItem.value * 10) / 10
@@ -206,7 +206,7 @@ AbstractListItem {
 				width: gaugeFlow.gaugeWidth
 				height: Theme.screenSize === Theme.Portrait ? implicitHeight : gaugeFlow.parent.height
 				visible: root.humidityAvailable
-				name: root.hasTwoGauges ? "" : (root.device?.name ?? "")
+				name: root.hasTwoGauges ? "" : (Global.environmentInputs.sensorDisplayName(root.device))
 				iconSource: "qrc:/images/icon_humidity_32.svg"
 				value: root.humidityAvailable ? Math.round(humidityItem.value) : NaN
 				unit: VenusOS.Units_Percentage
