@@ -139,6 +139,32 @@ ObjectModel {
 			return numericTemperature(value) ? value.toFixed(1) + " °C" : "—"
 		}
 
+		// Phase 6: display only the field valid for the observed heater mode.
+		// Never turn a power level or a stale reading into a thermostat setpoint.
+		function settingLabel(reading) {
+			if (!readingIsFresh(reading)) return "Setting"
+			if (reading.mode === "level") return "Power level"
+			if (reading.mode === "thermostat") return "Setpoint"
+			return "Setting"
+		}
+
+		function settingValue(reading) {
+			if (!readingIsFresh(reading)) return "—"
+			if (reading.mode === "level") {
+				const level = reading.power_level
+				return typeof level === "number" && isFinite(level)
+					&& Math.floor(level) === level && level >= 1 && level <= 10
+					? String(level) + " / 10" : "—"
+			}
+			if (reading.mode === "thermostat") {
+				const setpoint = reading.setpoint_c
+				return typeof setpoint === "number" && isFinite(setpoint)
+					&& setpoint >= 0 && setpoint <= 60
+					? degrees(setpoint) : "—"
+			}
+			return "—"
+		}
+
 		function readState(reading) {
 			if (!reading) return "NO DATA"
 			if (String(reading.status).toLowerCase() !== "ok") return "BLE OFFLINE / UNAVAILABLE"
@@ -308,10 +334,9 @@ ObjectModel {
 									}
 									Column {
 										spacing: 3
-										Text { text: "Setpoint"; font.pixelSize: 11; color: Theme.color_font_secondary }
+										Text { text: heatingRoot.settingLabel(heaterCard.reading); font.pixelSize: 11; color: Theme.color_font_secondary }
 										Text {
-											text: heaterCard.fresh && heaterCard.reading
-												? heatingRoot.degrees(heaterCard.reading.setpoint_c) : "—"
+											text: heatingRoot.settingValue(heaterCard.reading)
 											font.pixelSize: 22
 											font.bold: true
 											color: Theme.color_font_primary
