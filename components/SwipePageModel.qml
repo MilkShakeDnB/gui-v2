@@ -102,7 +102,7 @@ ObjectModel {
 
 		// Read-only JSON published separately from the existing BLE reader.
 		readonly property string statusUrl: "/sunster-v7/status.json"
-		readonly property int maxReadingAgeMs: 120000
+		readonly property int maxReadingAgeMs: 720000
 		readonly property bool controlsVerified: false // FAIL-CLOSED: never change without validated BLE protocol + authenticated server
 		property var heaters: ({})
 		property string fetchState: "Waiting for Sunster data"
