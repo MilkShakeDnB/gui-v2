@@ -189,12 +189,14 @@ ObjectModel {
 			req.send()
 		}
 
+		Component.onCompleted: refresh()
+
 		onIsCurrentPageChanged: if (isCurrentPage) refresh()
 
 		Timer {
 			interval: 15000
 			repeat: true
-			running: heatingRoot.isCurrentPage
+			running: true // V7 diagnostic: refresh independently of current page
 			onTriggered: {
 				heatingRoot.nowMs = Date.now()
 				heatingRoot.refresh()
