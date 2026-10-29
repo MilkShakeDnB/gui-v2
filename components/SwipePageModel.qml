@@ -364,6 +364,17 @@ ObjectModel {
 									}
 								}
 								Text {
+								    width: parent.width
+								    text: heaterCard.fresh && heaterCard.reading
+								        ? (heaterCard.reading.mode === "thermostat" ? "MODE: THERMOSTAT"
+								            : heaterCard.reading.mode === "level" ? "MODE: LEVEL" : "MODE: UNKNOWN")
+								        : "MODE: UNAVAILABLE"
+								    font.pixelSize: 13
+								    font.bold: true
+								    color: Theme.color_font_primary
+								}
+
+								Text {
 									width: parent.width
 									text: "Last BLE read: " + (heaterCard.reading && heaterCard.reading.observed_at
 										? String(heaterCard.reading.observed_at) : "—")
@@ -400,7 +411,7 @@ ObjectModel {
 									color: Theme.color_listItem_separator
 								}
 								Text {
-									text: "POWER  •  CONTROL PREVIEW"
+									text: "THERMOSTAT AUTO  •  MANUAL PREVIEW"
 									font.pixelSize: 11
 									font.bold: true
 									color: Theme.color_font_secondary
@@ -408,10 +419,10 @@ ObjectModel {
 								Row {
 									spacing: 10
 									Repeater {
-										model: ["ON", "OFF"]
+										model: ["AUTO ON", "AUTO OFF"]
 										delegate: Rectangle {
 											required property string modelData
-											width: 92
+											width: 112
 											height: 40
 											radius: 8
 											color: Theme.color_listItem_background
@@ -428,7 +439,15 @@ ObjectModel {
 									}
 								}
 								Text {
-									text: "SETPOINT  •  CONTROL PREVIEW"
+								    width: parent.width
+								    text: "AUTO is manual and separate from POWER. Returning from Level to Thermostat must leave AUTO OFF; never enable AUTO automatically."
+								    font.pixelSize: 11
+								    color: Theme.color_font_secondary
+								    wrapMode: Text.Wrap
+								}
+
+								Text {
+									text: "THERMOSTAT SETPOINT  •  PREVIEW"
 									font.pixelSize: 11
 									font.bold: true
 									color: Theme.color_font_secondary
@@ -455,6 +474,47 @@ ObjectModel {
 										}
 									}
 								}
+								Rectangle {
+								    width: parent.width
+								    height: 1
+								    color: Theme.color_listItem_separator
+								}
+
+								Text {
+								    width: parent.width
+								    text: "LEVEL 1-10  •  SECONDARY MODE PREVIEW"
+								    font.pixelSize: 11
+								    font.bold: true
+								    color: Theme.color_font_secondary
+								    wrapMode: Text.Wrap
+								}
+
+								Grid {
+								    id: levelsPreviewGrid
+								    width: parent.width
+								    columns: 5
+								    spacing: 6
+								    Repeater {
+								        model: 10
+								        delegate: Rectangle {
+								            id: levelPreviewButton
+								            required property int index
+								            width: (levelsPreviewGrid.width - levelsPreviewGrid.spacing * 4) / 5
+								            height: 36
+								            radius: 8
+								            color: Theme.color_listItem_background
+								            border.width: 1
+								            border.color: Theme.color_font_disabled
+								            Text {
+								                anchors.centerIn: parent
+								                text: String(levelPreviewButton.index + 1)
+								                color: Theme.color_font_disabled
+								            }
+								            // Intentionally no MouseArea; no control code.
+								        }
+								    }
+								}
+
 								Text {
 									width: parent.width
 									text: "Locked until command protocol and cooldown behavior are validated."
