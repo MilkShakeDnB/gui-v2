@@ -174,6 +174,15 @@ ObjectModel {
 			return String(code) + " (unverified)"
 		}
 
+		// Diagnostic only: byte 31 is NOT verified AUTO ON/OFF.
+		function automaticHeatingRawLabel(reading) {
+			if (!readingIsFresh(reading)) return "—"
+			const code = reading.automatic_heating_raw
+			if (typeof code !== "number" || !isFinite(code) ||
+			    Math.floor(code) !== code || code < 0 || code > 255)
+			    return "UNKNOWN"
+			return String(code) + " (unverified)"
+		}
 		function readState(reading) {
 			if (!reading) return "NO DATA"
 			if (String(reading.status).toLowerCase() !== "ok") return "BLE OFFLINE / UNAVAILABLE"
@@ -372,6 +381,13 @@ ObjectModel {
 									text: "AUTO ON/OFF (Thermo): " +
 									    (heaterCard.fresh && heaterCard.reading &&
 									     heaterCard.reading.mode === "thermostat" ? "UNKNOWN" : "—")
+									font.pixelSize: 11
+									color: Theme.color_font_secondary
+									wrapMode: Text.Wrap
+								}
+								Text {
+									width: parent.width
+									text: "AUTO diagnostic byte 31: " + heatingRoot.automaticHeatingRawLabel(heaterCard.reading)
 									font.pixelSize: 11
 									color: Theme.color_font_secondary
 									wrapMode: Text.Wrap
