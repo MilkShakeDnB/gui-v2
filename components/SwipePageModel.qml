@@ -165,6 +165,15 @@ ObjectModel {
 			return "—"
 		}
 
+		function rawStateLabel(reading) {
+			if (!readingIsFresh(reading)) return "—"
+			const code = reading.state_code_raw
+			if (typeof code !== "number" || !isFinite(code) ||
+			    Math.floor(code) !== code || code < 0 || code > 255)
+			    return "UNKNOWN"
+			return String(code) + " (unverified)"
+		}
+
 		function readState(reading) {
 			if (!reading) return "NO DATA"
 			if (String(reading.status).toLowerCase() !== "ok") return "BLE OFFLINE / UNAVAILABLE"
@@ -350,6 +359,22 @@ ObjectModel {
 									font.pixelSize: 11
 									color: Theme.color_font_secondary
 									elide: Text.ElideRight
+								}
+								Text {
+									width: parent.width
+									text: "BLE state code: " + heatingRoot.rawStateLabel(heaterCard.reading)
+									font.pixelSize: 11
+									color: Theme.color_font_secondary
+									wrapMode: Text.Wrap
+								}
+								Text {
+									width: parent.width
+									text: "AUTO ON/OFF (Thermo): " +
+									    (heaterCard.fresh && heaterCard.reading &&
+									     heaterCard.reading.mode === "thermostat" ? "UNKNOWN" : "—")
+									font.pixelSize: 11
+									color: Theme.color_font_secondary
+									wrapMode: Text.Wrap
 								}
 								Rectangle {
 									width: parent.width
