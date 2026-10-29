@@ -324,7 +324,9 @@ ObjectModel {
 
 								Text {
 									width: parent.width
-									text: heaterCard.modelData
+									text: heaterCard.modelData === "Caravan Heater" ? "Heater Living Room" :
+									heaterCard.modelData === "Caravan Bedroom" ? "Heater Bedroom" :
+									heaterCard.modelData
 									font.pixelSize: 19
 									font.bold: true
 									color: Theme.color_font_primary
