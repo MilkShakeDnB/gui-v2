@@ -482,37 +482,34 @@ ObjectModel {
 
 								Text {
 								    width: parent.width
-								    text: "LEVEL 1-10  •  SECONDARY MODE PREVIEW"
+								    text: "LEVEL  •  CONTROL PREVIEW"
 								    font.pixelSize: 11
 								    font.bold: true
 								    color: Theme.color_font_secondary
 								    wrapMode: Text.Wrap
 								}
 
-								Grid {
-								    id: levelsPreviewGrid
-								    width: parent.width
-								    columns: 5
-								    spacing: 6
-								    Repeater {
-								        model: 10
-								        delegate: Rectangle {
-								            id: levelPreviewButton
-								            required property int index
-								            width: (levelsPreviewGrid.width - levelsPreviewGrid.spacing * 4) / 5
-								            height: 36
-								            radius: 8
-								            color: Theme.color_listItem_background
-								            border.width: 1
-								            border.color: Theme.color_font_disabled
-								            Text {
-								                anchors.centerIn: parent
-								                text: String(levelPreviewButton.index + 1)
-								                color: Theme.color_font_disabled
-								            }
-								            // Intentionally no MouseArea; no control code.
-								        }
-								    }
+								Row {
+									spacing: 18
+									Repeater {
+										model: ["−", "+"]
+										delegate: Rectangle {
+											required property string modelData
+											width: 92
+											height: 40
+											radius: 8
+											color: Theme.color_listItem_background
+											border.width: 1
+											border.color: Theme.color_font_disabled
+											Text {
+												anchors.centerIn: parent
+												text: modelData
+												font.pixelSize: 20
+												color: Theme.color_font_disabled
+											}
+											// No MouseArea: Level +/- preview is intentionally inert.
+										}
+									}
 								}
 
 								Text {
