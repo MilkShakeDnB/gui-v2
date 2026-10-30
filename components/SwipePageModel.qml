@@ -103,7 +103,14 @@ ObjectModel {
 		// Read-only JSON published separately from the existing BLE reader.
 		readonly property string statusUrl: "https://192.168.10.215/sunster-v7/status.json"
 		readonly property int maxReadingAgeMs: 720000
-		readonly property bool controlsVerified: false // FAIL-CLOSED: never change without validated BLE protocol + authenticated server
+		// Stage8: closed unless AUTHENTICATED and short-lived gate is confirmed.
+		readonly property bool controlsVerified: apiOnline && controlGate && controlToken.length >= 32
+		readonly property string controlUrl: "https://192.168.10.215/sunster-v7-control/"
+		property bool apiOnline: false
+		property bool controlGate: false
+		property string controlToken: ""
+		property string controlMessage: "SETPOINT CONTROL LOCKED — local bridge not activated"
+		property bool commandPending: false
 		property var heaters: ({})
 		property string fetchState: "Waiting for Sunster data"
 		property double nowMs: Date.now()
@@ -189,6 +196,59 @@ ObjectModel {
 			return readingIsFresh(reading) ? "RECENT READING" : "STALE BLE READING"
 		}
 
+		function checkControlHealth() {
+			if (Qt.platform.os !== "wasm") return
+			const req = new XMLHttpRequest()
+			req.timeout = 6500
+			req.onreadystatechange = function() {
+				if (req.readyState !== 4) return
+				if (req.status !== 200) { apiOnline = false; controlGate = false; return }
+				try {
+					const data = JSON.parse(req.responseText)
+					apiOnline = data.schema_version === 1 && data.heater === "Caravan Heater"
+					controlGate = apiOnline && data.control_gate === true
+				} catch(e) { apiOnline = false; controlGate = false }
+			}
+			req.onerror = function() { apiOnline = false; controlGate = false }
+			req.ontimeout = function() { apiOnline = false; controlGate = false }
+			req.open("GET", controlUrl + "health?t=" + Date.now())
+			req.send()
+		}
+
+		function sendSetpointStep(heater, direction) {
+			if (!controlsVerified || commandPending || heater !== "Caravan Heater") return
+			const reading = heaters[heater]
+			if (!readingIsFresh(reading) || reading.mode !== "thermostat") return
+			const expected = reading.setpoint_c
+			if (typeof expected !== "number" || Math.floor(expected) !== expected ||
+				expected < 8 || expected > 10 || expected + direction < 8 || expected + direction > 10) return
+			commandPending = true
+			controlMessage = "Changing setpoint — waiting for DIRECT Bluetooth readback…"
+			const req = new XMLHttpRequest()
+			req.timeout = 95000
+			req.onreadystatechange = function() {
+				if (req.readyState !== 4) return
+				commandPending = false
+				try {
+					const data = JSON.parse(req.responseText)
+					if (req.status === 200 && data.confirmed === true && data.heater === heater &&
+						data.setpoint_c === expected + direction) {
+						controlMessage = "GATT VERIFIED: " + data.setpoint_c + " °C (physical state not verified)"
+						refresh()
+					} else {
+						controlMessage = "NOT VERIFIED — check Sunster phone app: " + (data.message || data.error || req.status)
+					}
+				} catch(e) { controlMessage = "UNKNOWN RESPONSE — check Sunster phone app" }
+				checkControlHealth()
+			}
+			req.onerror = function() { commandPending = false; controlMessage = "NETWORK ERROR — check Sunster phone app" }
+			req.ontimeout = function() { commandPending = false; controlMessage = "TIMEOUT — check Sunster phone app" }
+			req.open("POST", controlUrl + "setpoint")
+			req.setRequestHeader("Content-Type", "application/json")
+			req.setRequestHeader("X-Sunster-Token", controlToken)
+			req.send(JSON.stringify({"heater": heater, "direction": direction, "expected_setpoint": expected}))
+		}
+
 		function refresh() {
 			if (requestPending) return
 			if (Qt.platform.os !== "wasm") {
@@ -233,7 +293,7 @@ ObjectModel {
 			req.send()
 		}
 
-		Component.onCompleted: refresh()
+		Component.onCompleted: { refresh(); checkControlHealth() }
 
 		onIsCurrentPageChanged: if (isCurrentPage) refresh()
 
@@ -244,6 +304,7 @@ ObjectModel {
 			onTriggered: {
 				heatingRoot.nowMs = Date.now()
 				heatingRoot.refresh()
+				heatingRoot.checkControlHealth()
 			}
 		}
 
@@ -287,7 +348,7 @@ ObjectModel {
 						anchors.right: parent.right
 						anchors.verticalCenter: parent.verticalCenter
 						anchors.margins: 12
-						text: "CONTROL LOCKED  •  Bluetooth commands have not been validated. Display only."
+						text: heatingRoot.controlsVerified ? "SUPERVISED SETPOINT — FIRST HEATER ONLY" : "CONTROL LOCKED — manual gate and operator token required"
 						font.pixelSize: 12
 						font.bold: true
 						color: Theme.color_orange
@@ -295,6 +356,44 @@ ObjectModel {
 					}
 				}
 
+				Text {
+					width: parent.width
+					text: heatingRoot.controlMessage
+					font.pixelSize: 12
+					color: Theme.color_font_secondary
+					wrapMode: Text.Wrap
+				}
+				Text {
+					width: parent.width
+					text: "STAGE8: only Living Room setpoint 8–10 °C. AUTO, LEVEL and Bedroom remain locked."
+					font.pixelSize: 11
+					color: Theme.color_orange
+					wrapMode: Text.Wrap
+				}
+				Rectangle {
+					width: parent.width
+					height: 46
+					radius: 6
+					color: Theme.color_listItem_background
+					border.color: Theme.color_listItem_separator
+					TextInput {
+						id: stage8OperatorToken
+						anchors.fill: parent
+						anchors.margins: 10
+						font.pixelSize: 17
+						color: Theme.color_font_primary
+						echoMode: TextInput.Password
+						clip: true
+						onTextChanged: heatingRoot.controlToken = text.trim()
+					}
+				}
+				Text {
+					width: parent.width
+					text: heatingRoot.apiOnline ? (heatingRoot.controlGate ? "Supervised gate OPEN (max 10 min). Enter operator token above." : "Supervised gate CLOSED") : "Control API unavailable. No commands can be sent."
+					font.pixelSize: 11
+					color: heatingRoot.controlsVerified ? Theme.color_ok : Theme.color_orange
+					wrapMode: Text.Wrap
+				}
 				Grid {
 					id: heaterGrid
 					width: parent.width
@@ -447,7 +546,7 @@ ObjectModel {
 								}
 
 								Text {
-									text: "THERMOSTAT SETPOINT  •  PREVIEW"
+									text: "THERMOSTAT SETPOINT  •  SUPERVISED 8–10 °C"
 									font.pixelSize: 11
 									font.bold: true
 									color: Theme.color_font_secondary
@@ -457,7 +556,15 @@ ObjectModel {
 									Repeater {
 										model: ["−", "+"]
 										delegate: Rectangle {
+											id: stage8SetpointButton
 											required property string modelData
+											readonly property int currentSetpoint: heaterCard.fresh && heaterCard.reading &&
+												typeof heaterCard.reading.setpoint_c === "number" ? heaterCard.reading.setpoint_c : -1
+											enabled: heatingRoot.controlsVerified && !heatingRoot.commandPending &&
+												heaterCard.modelData === "Caravan Heater" && heaterCard.fresh &&
+												heaterCard.reading && heaterCard.reading.mode === "thermostat" &&
+												(modelData === "+" ? currentSetpoint >= 8 && currentSetpoint < 10 :
+												 currentSetpoint > 8 && currentSetpoint <= 10)
 											width: 92
 											height: 40
 											radius: 8
@@ -468,9 +575,13 @@ ObjectModel {
 												anchors.centerIn: parent
 												text: modelData
 												font.pixelSize: 20
-												color: Theme.color_font_disabled
+												color: stage8SetpointButton.enabled ? Theme.color_font_primary : Theme.color_font_disabled
 											}
-											// No MouseArea: control buttons deliberately inert.
+											MouseArea {
+                                            anchors.fill: parent
+                                            enabled: stage8SetpointButton.enabled
+                                            onClicked: heatingRoot.sendSetpointStep(heaterCard.modelData, stage8SetpointButton.modelData === "+" ? 1 : -1)
+                                        }
 										}
 									}
 								}
@@ -526,7 +637,7 @@ ObjectModel {
 
 				Text {
 					width: parent.width
-					text: "* Live temperature remains experimental until checked against the original Sunster app. No heater commands are sent."
+					text: "* Live temperature is experimental. Stage8 may send ONE setpoint command only after operator authentication + supervised gate. Verify physical state in Sunster app."
 					font.pixelSize: 12
 					color: Theme.color_font_secondary
 					wrapMode: Text.Wrap
