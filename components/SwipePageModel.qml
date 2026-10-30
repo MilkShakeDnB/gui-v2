@@ -104,12 +104,11 @@ ObjectModel {
 		readonly property string statusUrl: "https://192.168.10.215/sunster-v7/status.json"
 		readonly property int maxReadingAgeMs: 720000
 		// Stage8: closed unless AUTHENTICATED and short-lived gate is confirmed.
-		readonly property bool controlsVerified: apiOnline && controlGate && controlToken.length >= 32
+		readonly property bool controlsVerified: apiOnline && controlGate
 		readonly property string controlUrl: "https://192.168.10.215/sunster-v7-control/"
 		property bool apiOnline: false
 		property bool controlGate: false
-		property string controlToken: ""
-		property string controlMessage: "SETPOINT CONTROL LOCKED — local bridge not activated"
+				property string controlMessage: "Use + / − only during supervised approval; confirm in Sunster app"
 		property bool commandPending: false
 		property var heaters: ({})
 		property string fetchState: "Waiting for Sunster data"
@@ -245,8 +244,7 @@ ObjectModel {
 			req.ontimeout = function() { commandPending = false; controlMessage = "TIMEOUT — check Sunster phone app" }
 			req.open("POST", controlUrl + "setpoint")
 			req.setRequestHeader("Content-Type", "application/json")
-			req.setRequestHeader("X-Sunster-Token", controlToken)
-			req.send(JSON.stringify({"heater": heater, "direction": direction, "expected_setpoint": expected}))
+						req.send(JSON.stringify({"heater": heater, "direction": direction, "expected_setpoint": expected}))
 		}
 
 		function refresh() {
@@ -348,7 +346,7 @@ ObjectModel {
 						anchors.right: parent.right
 						anchors.verticalCenter: parent.verticalCenter
 						anchors.margins: 12
-						text: heatingRoot.controlsVerified ? "SUPERVISED SETPOINT — FIRST HEATER ONLY" : "CONTROL LOCKED — manual gate and operator token required"
+						text: heatingRoot.controlsVerified ? "SUPERVISED SETPOINT — FIRST HEATER ONLY" : "CONTROL LOCKED — supervised gate closed"
 						font.pixelSize: 12
 						font.bold: true
 						color: Theme.color_orange
@@ -370,26 +368,9 @@ ObjectModel {
 					color: Theme.color_orange
 					wrapMode: Text.Wrap
 				}
-				Rectangle {
-					width: parent.width
-					height: 46
-					radius: 6
-					color: Theme.color_listItem_background
-					border.color: Theme.color_listItem_separator
-					TextInput {
-						id: stage8OperatorToken
-						anchors.fill: parent
-						anchors.margins: 10
-						font.pixelSize: 17
-						color: Theme.color_font_primary
-						echoMode: TextInput.Password
-						clip: true
-						onTextChanged: heatingRoot.controlToken = text.trim()
-					}
-				}
 				Text {
 					width: parent.width
-					text: heatingRoot.apiOnline ? (heatingRoot.controlGate ? "Supervised gate OPEN (max 10 min). Enter operator token above." : "Supervised gate CLOSED") : "Control API unavailable. No commands can be sent."
+					text: heatingRoot.apiOnline ? (heatingRoot.controlGate ? "Supervised gate OPEN (max 10 min). Living Room 8–10 °C only." : "Supervised gate CLOSED") : "Control API unavailable. No commands can be sent."
 					font.pixelSize: 11
 					color: heatingRoot.controlsVerified ? Theme.color_ok : Theme.color_orange
 					wrapMode: Text.Wrap
