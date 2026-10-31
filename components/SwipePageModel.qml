@@ -449,15 +449,23 @@ ObjectModel {
                                     Repeater {
                                         model: ["AUTO ON", "AUTO OFF"]
                                         delegate: Rectangle {
+                                            id: autoPreview
                                             required property string modelData
+                                            readonly property bool selected:
+                                                heaterCard.fresh && heaterCard.reading &&
+                                                typeof heaterCard.reading.automatic_heating_raw === "number" &&
+                                                (heaterCard.reading.automatic_heating_raw ===
+                                                    (modelData === "AUTO ON" ? 1 : 0))
                                             width: 112; height: 42; radius: 8
                                             color: Theme.color_listItem_background
-                                            border.width: 1
-                                            border.color: Theme.color_font_disabled
+                                            border.width: selected ? 2 : 1
+                                            border.color: selected ? Theme.color_ok : Theme.color_font_disabled
                                             Text {
                                                 anchors.centerIn: parent
-                                                text: modelData
-                                                color: Theme.color_font_disabled
+                                                text: autoPreview.modelData
+                                                color: autoPreview.selected
+                                                    ? Theme.color_font_primary
+                                                    : Theme.color_font_disabled
                                             }
                                         }
                                     }
