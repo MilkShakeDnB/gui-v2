@@ -104,12 +104,6 @@ ObjectModel {
 		readonly property string statusUrl: "https://192.168.10.215/sunster-v7/status.json"
 		readonly property int maxReadingAgeMs: 720000
 		// Stage8: closed unless AUTHENTICATED and short-lived gate is confirmed.
-		readonly property bool controlsVerified: apiOnline && controlGate
-		readonly property string controlUrl: "https://192.168.10.215/sunster-v7-control/"
-		property bool apiOnline: false
-		property bool controlGate: false
-				property string controlMessage: "Use + / − only during supervised approval; confirm in Sunster app"
-		property bool commandPending: false
 		property var heaters: ({})
 		property string fetchState: "Waiting for Sunster data"
 		property double nowMs: Date.now()
@@ -171,80 +165,10 @@ ObjectModel {
 			return "—"
 		}
 
-		function rawStateLabel(reading) {
-			if (!readingIsFresh(reading)) return "—"
-			const code = reading.state_code_raw
-			if (typeof code !== "number" || !isFinite(code) ||
-			    Math.floor(code) !== code || code < 0 || code > 255)
-			    return "UNKNOWN"
-			return String(code) + " (unverified)"
-		}
-
-		// Diagnostic only: byte 31 is NOT verified AUTO ON/OFF.
-		function automaticHeatingRawLabel(reading) {
-			if (!readingIsFresh(reading)) return "—"
-			const code = reading.automatic_heating_raw
-			if (typeof code !== "number" || !isFinite(code) ||
-			    Math.floor(code) !== code || code < 0 || code > 255)
-			    return "UNKNOWN"
-			return String(code) + " (unverified)"
-		}
 		function readState(reading) {
 			if (!reading) return "NO DATA"
 			if (String(reading.status).toLowerCase() !== "ok") return "BLE OFFLINE / UNAVAILABLE"
 			return readingIsFresh(reading) ? "RECENT READING" : "STALE BLE READING"
-		}
-
-		function checkControlHealth() {
-			if (Qt.platform.os !== "wasm") return
-			const req = new XMLHttpRequest()
-			req.timeout = 6500
-			req.onreadystatechange = function() {
-				if (req.readyState !== 4) return
-				if (req.status !== 200) { apiOnline = false; controlGate = false; return }
-				try {
-					const data = JSON.parse(req.responseText)
-					apiOnline = data.schema_version === 1 && data.heater === "Caravan Heater"
-					controlGate = apiOnline && data.control_gate === true
-				} catch(e) { apiOnline = false; controlGate = false }
-			}
-			req.onerror = function() { apiOnline = false; controlGate = false }
-			req.ontimeout = function() { apiOnline = false; controlGate = false }
-			req.open("GET", controlUrl + "health?t=" + Date.now())
-			req.send()
-		}
-
-		function sendSetpointStep(heater, direction) {
-			if (!controlsVerified || commandPending || heater !== "Caravan Heater") return
-			const reading = heaters[heater]
-			if (!readingIsFresh(reading) || reading.mode !== "thermostat") return
-			const expected = reading.setpoint_c
-			if (typeof expected !== "number" || Math.floor(expected) !== expected ||
-				expected < 8 || expected > 10 || expected + direction < 8 || expected + direction > 10) return
-			commandPending = true
-			controlMessage = "Changing setpoint — waiting for DIRECT Bluetooth readback…"
-			const req = new XMLHttpRequest()
-			req.timeout = 95000
-			req.onreadystatechange = function() {
-				if (req.readyState !== 4) return
-				commandPending = false
-				try {
-					const data = JSON.parse(req.responseText)
-					if (req.status === 200 && data.confirmed === true && data.heater === heater &&
-						data.setpoint_c === expected + direction) {
-						controlMessage = "GATT VERIFIED: " + data.setpoint_c + " °C (physical state not verified)"
-						refresh()
-					} else {
-						controlMessage = "NOT VERIFIED — check Sunster phone app: " + (data.message || data.error || req.status)
-					}
-				} catch(e) { controlMessage = "UNKNOWN RESPONSE — check Sunster phone app" }
-				checkControlHealth()
-			}
-			req.onerror = function() { commandPending = false; controlMessage = "NETWORK ERROR — check Sunster phone app" }
-			req.ontimeout = function() { commandPending = false; controlMessage = "TIMEOUT — check Sunster phone app" }
-			req.open("POST", controlUrl + "setpoint")
-			req.setRequestHeader("Content-Type", "application/json")
-						req.send(JSON.stringify({"heater": heater, "direction": direction, "expected_setpoint": expected}))
 		}
 
 		function refresh() {
@@ -273,7 +197,7 @@ ObjectModel {
 						throw new Error("Missing one of the heaters")
 					heaters = data.heaters
 					nowMs = Date.now()
-					fetchState = "Reader response received — control remains locked"
+					fetchState = "Reader response received"
 				} catch (error) {
 					fetchState = "Invalid Sunster data: " + error.message
 				}
@@ -291,7 +215,7 @@ ObjectModel {
 			req.send()
 		}
 
-		Component.onCompleted: { refresh(); checkControlHealth() }
+		Component.onCompleted: refresh()
 
 		onIsCurrentPageChanged: if (isCurrentPage) refresh()
 
@@ -302,7 +226,7 @@ ObjectModel {
 			onTriggered: {
 				heatingRoot.nowMs = Date.now()
 				heatingRoot.refresh()
-				heatingRoot.checkControlHealth()
+
 			}
 		}
 
@@ -346,7 +270,7 @@ ObjectModel {
 						anchors.right: parent.right
 						anchors.verticalCenter: parent.verticalCenter
 						anchors.margins: 12
-						text: heatingRoot.controlsVerified ? "SUPERVISED SETPOINT — FIRST HEATER ONLY" : "CONTROL LOCKED — supervised gate closed"
+						text: "CONTROL LOCKED - HEATING V7 PREVIEW ONLY"
 						font.pixelSize: 12
 						font.bold: true
 						color: Theme.color_orange
@@ -354,27 +278,6 @@ ObjectModel {
 					}
 				}
 
-				Text {
-					width: parent.width
-					text: heatingRoot.controlMessage
-					font.pixelSize: 12
-					color: Theme.color_font_secondary
-					wrapMode: Text.Wrap
-				}
-				Text {
-					width: parent.width
-					text: "STAGE8: only Living Room setpoint 8–10 °C. AUTO, LEVEL and Bedroom remain locked."
-					font.pixelSize: 11
-					color: Theme.color_orange
-					wrapMode: Text.Wrap
-				}
-				Text {
-					width: parent.width
-					text: heatingRoot.apiOnline ? (heatingRoot.controlGate ? "Supervised gate OPEN (max 10 min). Living Room 8–10 °C only." : "Supervised gate CLOSED") : "Control API unavailable. No commands can be sent."
-					font.pixelSize: 11
-					color: heatingRoot.controlsVerified ? Theme.color_ok : Theme.color_orange
-					wrapMode: Text.Wrap
-				}
 				Grid {
 					id: heaterGrid
 					width: parent.width
@@ -423,17 +326,6 @@ ObjectModel {
 									spacing: 22
 									Column {
 										spacing: 3
-										Text { text: "Temperature*"; font.pixelSize: 11; color: Theme.color_font_secondary }
-										Text {
-											text: heaterCard.fresh && heaterCard.reading
-												? heatingRoot.degrees(heaterCard.reading.temperature_c_candidate) : "—"
-											font.pixelSize: 22
-											font.bold: true
-											color: Theme.color_font_primary
-										}
-									}
-									Column {
-										spacing: 3
 										Text { text: heatingRoot.settingLabel(heaterCard.reading); font.pixelSize: 11; color: Theme.color_font_secondary }
 										Text {
 											text: heatingRoot.settingValue(heaterCard.reading)
@@ -462,167 +354,144 @@ ObjectModel {
 									color: Theme.color_font_secondary
 									elide: Text.ElideRight
 								}
-								Text {
-									width: parent.width
-									text: "BLE state code: " + heatingRoot.rawStateLabel(heaterCard.reading)
-									font.pixelSize: 11
-									color: Theme.color_font_secondary
-									wrapMode: Text.Wrap
-								}
-								Text {
-									width: parent.width
-									text: "AUTO ON/OFF (Thermo): " +
-									    (heaterCard.fresh && heaterCard.reading &&
-									     heaterCard.reading.mode === "thermostat" ? "UNKNOWN" : "—")
-									font.pixelSize: 11
-									color: Theme.color_font_secondary
-									wrapMode: Text.Wrap
-								}
-								Text {
-									width: parent.width
-									text: "AUTO diagnostic byte 31: " + heatingRoot.automaticHeatingRawLabel(heaterCard.reading)
-									font.pixelSize: 11
-									color: Theme.color_font_secondary
-									wrapMode: Text.Wrap
-								}
 								Rectangle {
 									width: parent.width
 									height: 1
 									color: Theme.color_listItem_separator
 								}
-								Text {
-									text: "THERMOSTAT AUTO  •  MANUAL PREVIEW"
-									font.pixelSize: 11
-									font.bold: true
-									color: Theme.color_font_secondary
-								}
-								Row {
-									spacing: 10
-									Repeater {
-										model: ["AUTO ON", "AUTO OFF"]
-										delegate: Rectangle {
-											required property string modelData
-											width: 112
-											height: 40
-											radius: 8
-											color: Theme.color_listItem_background
-											border.color: Theme.color_font_disabled
-											border.width: 1
-											Text {
-												anchors.centerIn: parent
-												text: modelData
-												font.bold: true
-												color: Theme.color_font_disabled
-											}
-											// No MouseArea: incapable of sending BLE commands.
-										}
-									}
-								}
-								Text {
-								    width: parent.width
-								    text: "AUTO is manual and separate from POWER. Returning from Level to Thermostat must leave AUTO OFF; never enable AUTO automatically."
-								    font.pixelSize: 11
-								    color: Theme.color_font_secondary
-								    wrapMode: Text.Wrap
-								}
 
-								Text {
-									text: "THERMOSTAT SETPOINT  •  SUPERVISED 8–10 °C"
-									font.pixelSize: 11
-									font.bold: true
-									color: Theme.color_font_secondary
-								}
-								Row {
-									spacing: 18
-									Repeater {
-										model: ["−", "+"]
-										delegate: Rectangle {
-											id: stage8SetpointButton
-											required property string modelData
-											readonly property int currentSetpoint: heaterCard.fresh && heaterCard.reading &&
-												typeof heaterCard.reading.setpoint_c === "number" ? heaterCard.reading.setpoint_c : -1
-											enabled: heatingRoot.controlsVerified && !heatingRoot.commandPending &&
-												heaterCard.modelData === "Caravan Heater" && heaterCard.fresh &&
-												heaterCard.reading && heaterCard.reading.mode === "thermostat" &&
-												(modelData === "+" ? currentSetpoint >= 8 && currentSetpoint < 10 :
-												 currentSetpoint > 8 && currentSetpoint <= 10)
-											width: 92
-											height: 40
-											radius: 8
-											color: Theme.color_listItem_background
-											border.color: Theme.color_font_disabled
-											border.width: 1
-											Text {
-												anchors.centerIn: parent
-												text: modelData
-												font.pixelSize: 20
-												color: stage8SetpointButton.enabled ? Theme.color_font_primary : Theme.color_font_disabled
-											}
-											MouseArea {
-                                            anchors.fill: parent
-                                            enabled: stage8SetpointButton.enabled
-                                            onClicked: heatingRoot.sendSetpointStep(heaterCard.modelData, stage8SetpointButton.modelData === "+" ? 1 : -1)
+                            // V7 HEATING INTERFACE: READ-ONLY PREVIEW
+
+                            Text {
+                                text: "POWER"
+                                font.pixelSize: 12
+                                color: Theme.color_font_secondary
+                            }
+                            Row {
+                                spacing: 10
+                                Repeater {
+                                    model: ["POWER ON", "POWER OFF"]
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        width: 112; height: 42; radius: 8
+                                        color: Theme.color_listItem_background
+                                        border.width: 1
+                                        border.color: Theme.color_font_disabled
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            color: Theme.color_font_disabled
                                         }
-										}
-									}
-								}
-								Rectangle {
-								    width: parent.width
-								    height: 1
-								    color: Theme.color_listItem_separator
-								}
+                                    }
+                                }
+                            }
 
-								Text {
-								    width: parent.width
-								    text: "LEVEL  •  CONTROL PREVIEW"
-								    font.pixelSize: 11
-								    font.bold: true
-								    color: Theme.color_font_secondary
-								    wrapMode: Text.Wrap
-								}
+                            Text {
+                                text: "MODE"
+                                font.pixelSize: 12
+                                color: Theme.color_font_secondary
+                            }
+                            Row {
+                                spacing: 10
+                                Repeater {
+                                    model: ["THERMOSTAT", "LEVEL"]
+                                    delegate: Rectangle {
+                                        id: modePreview
+                                        required property string modelData
+                                        readonly property bool selected:
+                                            heaterCard.fresh && heaterCard.reading &&
+                                            heaterCard.reading.mode ===
+                                            (modelData === "THERMOSTAT" ? "thermostat" : "level")
+                                        width: 112; height: 42; radius: 8
+                                        color: Theme.color_listItem_background
+                                        border.width: selected ? 2 : 1
+                                        border.color: selected ? Theme.color_ok : Theme.color_font_disabled
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modePreview.modelData
+                                            font.pixelSize: 11
+                                            color: modePreview.selected
+                                                ? Theme.color_font_primary
+                                                : Theme.color_font_disabled
+                                        }
+                                    }
+                                }
+                            }
 
-								Row {
-									spacing: 18
-									Repeater {
-										model: ["−", "+"]
-										delegate: Rectangle {
-											required property string modelData
-											width: 92
-											height: 40
-											radius: 8
-											color: Theme.color_listItem_background
-											border.width: 1
-											border.color: Theme.color_font_disabled
-											Text {
-												anchors.centerIn: parent
-												text: modelData
-												font.pixelSize: 20
-												color: Theme.color_font_disabled
-											}
-											// No MouseArea: Level +/- preview is intentionally inert.
-										}
-									}
-								}
+                            Column {
+                                width: parent.width
+                                spacing: 10
+                                visible: heaterCard.fresh && heaterCard.reading &&
+                                         heaterCard.reading.mode === "thermostat"
+                                Text {
+                                    text: "THERMOSTAT AUTO"
+                                    font.pixelSize: 12
+                                    color: Theme.color_font_secondary
+                                }
+                                Row {
+                                    spacing: 10
+                                    Repeater {
+                                        model: ["AUTO ON", "AUTO OFF"]
+                                        delegate: Rectangle {
+                                            required property string modelData
+                                            width: 112; height: 42; radius: 8
+                                            color: Theme.color_listItem_background
+                                            border.width: 1
+                                            border.color: Theme.color_font_disabled
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: modelData
+                                                color: Theme.color_font_disabled
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-								Text {
-									width: parent.width
-									text: "Locked until command protocol and cooldown behavior are validated."
-									font.pixelSize: 11
-									color: Theme.color_font_secondary
-									wrapMode: Text.Wrap
-								}
+                            Text {
+                                width: parent.width
+                                text: heaterCard.fresh && heaterCard.reading
+                                    ? (heaterCard.reading.mode === "thermostat"
+                                        ? "TEMPERATURE SETPOINT"
+                                        : heaterCard.reading.mode === "level"
+                                        ? "HEATING LEVEL" : "SETTING UNAVAILABLE")
+                                    : "SETTING UNAVAILABLE"
+                                font.pixelSize: 12
+                                color: Theme.color_font_secondary
+                            }
+
+                            Row {
+                                spacing: 18
+                                Repeater {
+                                    model: ["−", "+"]
+                                    delegate: Rectangle {
+                                        required property string modelData
+                                        width: 92; height: 44; radius: 8
+                                        color: Theme.color_listItem_background
+                                        border.width: 1
+                                        border.color: Theme.color_font_disabled
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: modelData
+                                            font.pixelSize: 22
+                                            color: Theme.color_font_disabled
+                                        }
+                                    }
+                                }
+                            }
+
+                            Text {
+                                width: parent.width
+                                text: "CONTROL LOCKED - interface preview only"
+                                font.pixelSize: 11
+                                color: Theme.color_orange
+                            }
+
 							}
 						}
 					}
 				}
 
-				Text {
-					width: parent.width
-					text: "* Live temperature is experimental. Stage8 may send ONE setpoint command only after operator authentication + supervised gate. Verify physical state in Sunster app."
-					font.pixelSize: 12
-					color: Theme.color_font_secondary
-					wrapMode: Text.Wrap
-				}
 			}
 		}
 	}
