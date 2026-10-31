@@ -101,13 +101,119 @@ ObjectModel {
 		focusPolicy: Qt.TabFocus
 
 		// Read-only JSON published separately from the existing BLE reader.
-		readonly property string statusUrl: "https://192.168.10.215/sunster-v7/status.json"
+		readonly property string statusUrl: "/sunster-v7/status.json"
 		readonly property int maxReadingAgeMs: 720000
 		// Stage8: closed unless AUTHENTICATED and short-lived gate is confirmed.
 		property var heaters: ({})
+		property var recentDirectReadbacks: ({})
 		property string fetchState: "Waiting for Sunster data"
 		property double nowMs: Date.now()
 		property bool requestPending: false
+
+		// V7 gated local bridge. NO credentials are bundled in the WASM build.
+		readonly property string apiBase: "/sunster-v7-control/"
+		property var allowedActions: ({})
+		property bool gateOpen: false
+		property bool authenticated: false
+		property bool controlBusy: false
+		property string csrf: ""
+		property var proposed: null
+		property string controlMessage: "Control locked. Monitoring remains available."
+		readonly property bool guiControlEnabled: false // Stage 4: monitor + build validation only
+		readonly property bool canControl: guiControlEnabled && gateOpen && authenticated && !controlBusy
+
+		function supports(heater, action) {
+			const actions = allowedActions[heater]
+			return canControl && readingIsFresh(heaters[heater]) && Array.isArray(actions) && actions.indexOf(action) >= 0
+		}
+
+		function requestApi(method, path, body, callback, withCsrf) {
+			if (Qt.platform.os !== "wasm") return
+			const req = new XMLHttpRequest()
+			req.open(method, apiBase + path)
+			req.timeout = 120000
+			if (method === "POST") {
+				req.setRequestHeader("Content-Type", "application/json")
+				if (withCsrf) req.setRequestHeader("X-Sunster-CSRF", csrf)
+			}
+			req.onreadystatechange = function() {
+				if (req.readyState !== 4) return
+				let result = ({})
+				try { result = JSON.parse(req.responseText) } catch (e) {}
+				callback(req.status, result)
+			}
+			req.onerror = function() { callback(0, ({error: "Network unavailable"})) }
+			req.ontimeout = function() { callback(0, ({error: "API timeout"})) }
+			req.send(method === "POST" ? JSON.stringify(body) : null)
+		}
+
+		function checkGateway() {
+			requestApi("GET", "health", null, function(code, data) {
+				if (code !== 200 || data.schema_version !== 1) {
+					gateOpen = false
+					authenticated = false
+					csrf = ""
+					allowedActions = ({})
+					proposed = null
+					controlMessage = "Gateway unavailable; preview only"
+					return
+				}
+				allowedActions = data.actions || ({})
+				gateOpen = data.gate_active === true
+				if (!gateOpen || data.authenticated !== true) {
+					authenticated = false
+					csrf = ""
+					proposed = null
+				}
+			}, false)
+		}
+
+		function unlock(pin) {
+			if (controlBusy || !gateOpen) return
+			controlBusy = true
+			requestApi("POST", "unlock", ({pin: pin}), function(code, data) {
+				controlBusy = false
+				if (code === 200 && data.authenticated === true && typeof data.csrf === "string") {
+					authenticated = true
+					csrf = data.csrf
+					controlMessage = "Unlocked for supervised control"
+				} else {
+					controlMessage = "Unlock blocked (" + code + ")"
+				}
+			}, false)
+		}
+
+		function propose(heater, action, value, expected) {
+			if (!supports(heater, action)) return
+			proposed = ({heater: heater, action: action, value: value, expected: expected})
+			controlMessage = "Confirm: " + heater + " / " + action + " -> " + String(value)
+		}
+
+		function confirmProposed() {
+			if (!proposed || controlBusy || !supports(proposed.heater, proposed.action)) return
+			const requested = proposed
+			proposed = null
+			controlBusy = true
+			requestApi("POST", "command", requested, function(code, result) {
+				controlBusy = false
+				if (code === 200 && result.confirmed === true) {
+					controlMessage = "Readback confirmed for " + requested.heater
+					if (result.status_after && typeof result.status_after === "object") {
+						const updated = Object.assign(({}), heaters)
+						updated[requested.heater] = Object.assign(({}), result.status_after,
+							({status: "ok", observed_at: new Date().toISOString()}))
+						heaters = updated
+						const recent = Object.assign(({}), recentDirectReadbacks)
+						recent[requested.heater] = updated[requested.heater]
+						recentDirectReadbacks = recent
+						nowMs = Date.now()
+					}
+				} else {
+					controlMessage = "NOT CONFIRMED (" + code + "). Check the heater/app before retrying."
+				}
+				checkGateway()
+			}, true)
+		}
 
 		function timestampMs(raw) {
 			if (typeof raw === "number" && isFinite(raw))
@@ -195,7 +301,15 @@ ObjectModel {
 					const b = data.heaters["Caravan Bedroom"]
 					if (!a || !b || typeof a !== "object" || typeof b !== "object")
 						throw new Error("Missing one of the heaters")
-					heaters = data.heaters
+					const merged = Object.assign(({}), data.heaters)
+					for (const key of ["Caravan Heater", "Caravan Bedroom"]) {
+						const direct = recentDirectReadbacks[key]
+						const cached = merged[key]
+						if (direct && readingIsFresh(direct) &&
+							timestampMs(direct.observed_at) > timestampMs(cached.observed_at))
+							merged[key] = direct
+					}
+					heaters = merged
 					nowMs = Date.now()
 					fetchState = "Reader response received"
 				} catch (error) {
@@ -215,7 +329,7 @@ ObjectModel {
 			req.send()
 		}
 
-		Component.onCompleted: refresh()
+		Component.onCompleted: { refresh(); checkGateway() }
 
 		onIsCurrentPageChanged: if (isCurrentPage) refresh()
 
@@ -226,6 +340,7 @@ ObjectModel {
 			onTriggered: {
 				heatingRoot.nowMs = Date.now()
 				heatingRoot.refresh()
+				heatingRoot.checkGateway()
 
 			}
 		}
@@ -270,11 +385,73 @@ ObjectModel {
 						anchors.right: parent.right
 						anchors.verticalCenter: parent.verticalCenter
 						anchors.margins: 12
-						text: "CONTROL LOCKED - HEATING V7 PREVIEW ONLY"
+						text: heatingRoot.canControl ? "SUPERVISED CONTROL ACTIVE" : "CONTROL LOCKED - READ-ONLY UNTIL UNLOCKED"
 						font.pixelSize: 12
 						font.bold: true
 						color: Theme.color_orange
 						wrapMode: Text.Wrap
+					}
+				}
+
+				Text {
+					width: parent.width
+					text: heatingRoot.controlMessage
+					wrapMode: Text.Wrap
+					font.pixelSize: 12
+					color: Theme.color_font_secondary
+				}
+				Row {
+					spacing: 10
+					visible: heatingRoot.gateOpen && !heatingRoot.authenticated
+					Rectangle {
+						width: 130; height: 42; radius: 6
+						color: Theme.color_listItem_background
+						border.color: Theme.color_listItem_separator
+						TextInput {
+							id: controlPin
+							anchors.fill: parent
+							anchors.margins: 8
+							font.pixelSize: 19
+							color: Theme.color_font_primary
+							echoMode: TextInput.Password
+							inputMethodHints: Qt.ImhDigitsOnly
+							maximumLength: 8
+						}
+					}
+					Rectangle {
+						width: 118; height: 42; radius: 8
+						color: Theme.color_listItem_background
+						border.color: Theme.color_ok
+						Text { anchors.centerIn: parent; text: "UNLOCK"; color: Theme.color_font_primary }
+						MouseArea { anchors.fill: parent; onClicked: { heatingRoot.unlock(controlPin.text); controlPin.text = "" } }
+					}
+				}
+				Rectangle {
+					width: parent.width
+					height: 62
+					radius: 8
+					visible: heatingRoot.proposed !== null
+					color: Theme.color_listItem_background
+					border.color: Theme.color_orange
+					Row {
+						anchors.centerIn: parent; spacing: 14
+						Text {
+							text: "Confirm " + (heatingRoot.proposed ? heatingRoot.proposed.action : "")
+							font.pixelSize: 14; color: Theme.color_font_primary
+						}
+						Rectangle {
+							width: 122; height: 42; radius: 6
+							color: Theme.color_listItem_background
+							border.color: Theme.color_ok
+							Text { anchors.centerIn: parent; text: "CONFIRM"; color: Theme.color_font_primary }
+							MouseArea { anchors.fill: parent; onClicked: heatingRoot.confirmProposed() }
+						}
+						Rectangle {
+							width: 76; height: 42; radius: 6
+							color: Theme.color_listItem_background
+							Text { anchors.centerIn: parent; text: "CANCEL"; color: Theme.color_font_primary }
+							MouseArea { anchors.fill: parent; onClicked: heatingRoot.proposed = null }
+						}
 					}
 				}
 
@@ -364,6 +541,19 @@ ObjectModel {
 
 								Text {
 									width: parent.width
+									text: !heaterCard.fresh || !heaterCard.reading
+										? "AUTO: unavailable (not POWER)"
+										: heaterCard.reading.automatic_heating_raw === 1
+										? "AUTO: ON (independent of POWER)"
+										: heaterCard.reading.automatic_heating_raw === 0
+										? "AUTO: OFF (heater can still run at level 1)"
+										: "AUTO: unknown (not POWER)"
+									font.pixelSize: 12
+									color: Theme.color_font_secondary
+									wrapMode: Text.Wrap
+								}
+								Text {
+									width: parent.width
 									text: "Last BLE read: " + (heaterCard.reading && heaterCard.reading.observed_at
 										? String(heaterCard.reading.observed_at) : "—")
 									font.pixelSize: 11
@@ -379,7 +569,7 @@ ObjectModel {
                             // V7 HEATING INTERFACE: READ-ONLY PREVIEW
 
                             Text {
-                                text: "POWER"
+                                text: "POWER (disabled until ON/OFF verified on hardware)"
                                 font.pixelSize: 12
                                 color: Theme.color_font_secondary
                             }
@@ -430,6 +620,13 @@ ObjectModel {
                                                 ? Theme.color_font_primary
                                                 : Theme.color_font_disabled
                                         }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: heaterCard.fresh && heatingRoot.supports(heaterCard.modelData, "mode")
+                                            onClicked: heatingRoot.propose(heaterCard.modelData, "mode",
+                                                modePreview.modelData === "THERMOSTAT" ? "thermostat" : "level",
+                                                heaterCard.reading.mode)
+                                        }
                                     }
                                 }
                             }
@@ -467,6 +664,13 @@ ObjectModel {
                                                     ? Theme.color_font_primary
                                                     : Theme.color_font_disabled
                                             }
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                enabled: heaterCard.fresh && heatingRoot.supports(heaterCard.modelData, "auto")
+                                                onClicked: heatingRoot.propose(heaterCard.modelData, "auto",
+                                                    autoPreview.modelData === "AUTO ON",
+                                                    heaterCard.reading.automatic_heating_raw === 1)
+                                            }
                                         }
                                     }
                                 }
@@ -500,13 +704,27 @@ ObjectModel {
                                             font.pixelSize: 22
                                             color: Theme.color_font_disabled
                                         }
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: heaterCard.fresh && heaterCard.reading &&
+                                                heatingRoot.supports(heaterCard.modelData,
+                                                    heaterCard.reading.mode === "thermostat" ? "setpoint" : "level")
+                                            onClicked: {
+                                                const thermostat = heaterCard.reading.mode === "thermostat"
+                                                const existing = thermostat ? heaterCard.reading.setpoint_c : heaterCard.reading.power_level
+                                                if (typeof existing !== "number" || !isFinite(existing)) return
+                                                const plus = modelData === "+" ? 1 : -1
+                                                heatingRoot.propose(heaterCard.modelData,
+                                                    thermostat ? "setpoint" : "level", existing + plus, existing)
+                                            }
+                                        }
                                     }
                                 }
                             }
 
                             Text {
                                 width: parent.width
-                                text: "CONTROL LOCKED - interface preview only"
+                                text: heatingRoot.canControl ? "Select action, then press CONFIRM" : "Control locked; status display only"
                                 font.pixelSize: 11
                                 color: Theme.color_orange
                             }
