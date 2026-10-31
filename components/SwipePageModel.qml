@@ -101,7 +101,7 @@ ObjectModel {
 		focusPolicy: Qt.TabFocus
 
 		// Read-only JSON published separately from the existing BLE reader.
-		readonly property string statusUrl: "https://192.168.10.215/sunster-v7/status.json"
+		readonly property string statusUrl: "https://192.168.10.215/sunster-v7-k51/status"
 		readonly property int maxReadingAgeMs: 720000
 		// Stage8: closed unless AUTHENTICATED and short-lived gate is confirmed.
 		property var heaters: ({})
@@ -111,7 +111,7 @@ ObjectModel {
 		property bool requestPending: false
 
 		// V7 gated local bridge. NO credentials are bundled in the WASM build.
-		readonly property string apiBase: "/sunster-v7-control/"
+		readonly property string apiBase: "/sunster-v7-k51/"
 		property var allowedActions: ({})
 		property bool gateOpen: false
 		property bool authenticated: false
