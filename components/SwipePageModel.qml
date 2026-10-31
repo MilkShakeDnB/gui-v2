@@ -136,14 +136,21 @@ ObjectModel {
 				req.setRequestHeader("Content-Type", "application/json")
 				if (withCsrf) req.setRequestHeader("X-Sunster-CSRF", csrf)
 			}
+			let callbackFinished = false
+			function finishOnce(code, data) {
+				if (callbackFinished) return
+				callbackFinished = true
+				callback(code, data)
+			}
 			req.onreadystatechange = function() {
 				if (req.readyState !== 4) return
 				let result = ({})
 				try { result = JSON.parse(req.responseText) } catch (e) {}
-				callback(req.status, result)
+				finishOnce(req.status, result)
 			}
-			req.onerror = function() { callback(0, ({error: "Network unavailable"})) }
-			req.ontimeout = function() { callback(0, ({error: "API timeout"})) }
+			req.onerror = function() { finishOnce(0, ({error: "Network unavailable"})) }
+			req.ontimeout = function() { finishOnce(0, ({error: "API timeout"})) }
+			req.onabort = function() { finishOnce(0, ({error: "Request aborted"})) }
 			req.send(method === "POST" ? JSON.stringify(body) : null)
 		}
 
@@ -198,16 +205,7 @@ ObjectModel {
 				controlBusy = false
 				if (code === 200 && result.confirmed === true) {
 					controlMessage = "Readback confirmed for " + requested.heater
-					if (result.status_after && typeof result.status_after === "object") {
-						const updated = Object.assign(({}), heaters)
-						updated[requested.heater] = Object.assign(({}), result.status_after,
-							({status: "ok", observed_at: new Date().toISOString()}))
-						heaters = updated
-						const recent = Object.assign(({}), recentDirectReadbacks)
-						recent[requested.heater] = updated[requested.heater]
-						recentDirectReadbacks = recent
-						nowMs = Date.now()
-					}
+					// Passive BLE reader remains the only source of observed state.
 				} else {
 					controlMessage = "NOT CONFIRMED (" + code + "). Check the heater/app before retrying."
 				}
