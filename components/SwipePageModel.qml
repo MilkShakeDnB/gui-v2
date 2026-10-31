@@ -326,7 +326,23 @@ ObjectModel {
 									spacing: 22
 									Column {
 										spacing: 3
-										Text { text: heatingRoot.settingLabel(heaterCard.reading); font.pixelSize: 11; color: Theme.color_font_secondary }
+										Column {
+										spacing: 3
+										Text {
+											text: "Current Temperature"
+											font.pixelSize: 11
+											color: Theme.color_font_secondary
+										}
+										Text {
+											text: heaterCard.fresh && heaterCard.reading
+												? heatingRoot.degrees(heaterCard.reading.temperature_c_candidate)
+												: "—"
+											font.pixelSize: 26
+											font.bold: true
+											color: Theme.color_font_primary
+										}
+									}
+									Text { text: heatingRoot.settingLabel(heaterCard.reading); font.pixelSize: 11; color: Theme.color_font_secondary }
 										Text {
 											text: heatingRoot.settingValue(heaterCard.reading)
 											font.pixelSize: 22
