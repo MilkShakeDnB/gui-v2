@@ -101,7 +101,7 @@ ObjectModel {
 		focusPolicy: Qt.TabFocus
 
 		// Read-only JSON published separately from the existing BLE reader.
-		readonly property string statusUrl: "/sunster-v7/status.json"
+		readonly property string statusUrl: "https://192.168.10.215/sunster-v7/status.json"
 		readonly property int maxReadingAgeMs: 720000
 		// Stage8: closed unless AUTHENTICATED and short-lived gate is confirmed.
 		property var heaters: ({})
